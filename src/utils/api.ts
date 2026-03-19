@@ -5,6 +5,13 @@ function getCookie(name: string): string | null {
   return m ? decodeURIComponent(m[1]) : null
 }
 
+function resolveApiUrl(path: string): string {
+  const base = (import.meta as any).env?.VITE_BACKEND_URL as string | undefined
+  if (!base) return path
+  if (/^https?:\/\//i.test(path)) return path
+  return new URL(path, base).toString()
+}
+
 export async function apiRequest<T>(path: string, init?: { method?: string; body?: any; headers?: Record<string, string> }): Promise<T> {
   const method = init?.method || 'GET'
   const headers: Record<string, string> = { ...(init?.headers || {}) }
@@ -19,7 +26,7 @@ export async function apiRequest<T>(path: string, init?: { method?: string; body
     }
   }
 
-  const res = await fetch(path, {
+  const res = await fetch(resolveApiUrl(path), {
     method,
     credentials: 'include',
     headers,
@@ -46,4 +53,3 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function apiPost<T>(path: string, body?: any, headers?: Record<string, string>): Promise<T> {
   return apiRequest<T>(path, { method: 'POST', body: body ?? {}, headers })
 }
-
