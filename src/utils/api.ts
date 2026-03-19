@@ -6,7 +6,13 @@ function getCookie(name: string): string | null {
 }
 
 function resolveApiUrl(path: string): string {
-  const base = import.meta.env.VITE_BACKEND_URL as string | undefined
+  const envBase = import.meta.env.VITE_BACKEND_URL as string | undefined
+  const base =
+    envBase && envBase.trim()
+      ? envBase.trim()
+      : window.location.hostname.endsWith('.pages.dev')
+        ? 'https://acc.aaaaaxin.cn'
+        : ''
   if (!base) return path
   if (/^https?:\/\//i.test(path)) return path
   return new URL(path, base).toString()
