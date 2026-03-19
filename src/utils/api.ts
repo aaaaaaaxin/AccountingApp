@@ -6,7 +6,7 @@ function getCookie(name: string): string | null {
 }
 
 function resolveApiUrl(path: string): string {
-  const base = (import.meta as any).env?.VITE_BACKEND_URL as string | undefined
+  const base = import.meta.env.VITE_BACKEND_URL as string | undefined
   if (!base) return path
   if (/^https?:\/\//i.test(path)) return path
   return new URL(path, base).toString()
