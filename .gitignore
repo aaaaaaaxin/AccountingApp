@@ -11,8 +11,9 @@ logs/
 # env files
 .env
 .env.*
+deploy/.env
+**/.env
 
 # OS / editors
 .DS_Store
 Thumbs.db
-
