@@ -1,0 +1,15 @@
+Version: v1.2
+ArchivedAt: 2026-03-15
+ProjectPath: f:\aaaaaxin\trae_Prj\AccountingApp
+
+Verification
+- Dependency install: npm.cmd ci (exit code 0)
+  - Note: npm.ps1 blocked by PowerShell ExecutionPolicy; use npm.cmd on this machine
+  - Audit: 2 moderate severity vulnerabilities reported by npm audit (not fixed during archive)
+- Build (typecheck + production bundle): npm.cmd run build (exit code 0)
+  - Script: tsc && vite build
+  - Output: dist/ generated successfully
+
+Environment
+- OS: Windows
+- Node/NPM: invoked via npm.cmd

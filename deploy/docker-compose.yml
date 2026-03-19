@@ -1,0 +1,40 @@
+services:
+  backend:
+    build:
+      context: ../backend
+    container_name: accounting-backend
+    restart: unless-stopped
+    environment:
+      ACCOUNTING_DB_PATH: /data/accounting.sqlite3
+      ACCOUNTING_COOKIE_SECURE: "1"
+      ACCOUNTING_COOKIE_SAMESITE: lax
+      ACCOUNTING_SESSION_TTL_DAYS: "14"
+      ACCOUNTING_SETUP_KEY: ${ACCOUNTING_SETUP_KEY:-}
+      ACCOUNTING_OPLOG_RETENTION_DAYS: "90"
+      ACCOUNTING_RECYCLE_RETENTION_DAYS: "30"
+      ACCOUNTING_CORS_ORIGINS: ${ACCOUNTING_CORS_ORIGINS:-}
+      ACCOUNTING_LOG_DIR: /logs
+      ACCOUNTING_LOG_RETENTION_DAYS: "7"
+    volumes:
+      - accounting_data:/data
+      - accounting_logs:/logs
+    ports:
+      - "127.0.0.1:8031:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,urllib.request;print(json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3))['status'])"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: accounting-cloudflared
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    command: tunnel run --token ${CLOUDFLARED_TOKEN}
+
+volumes:
+  accounting_data:
+  accounting_logs:
