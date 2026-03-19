@@ -1,0 +1,5 @@
+/health https://acc.aaaaaxin.cn/health 200
+/auth/* https://acc.aaaaaxin.cn/auth/:splat 200
+/admin/* https://acc.aaaaaxin.cn/admin/:splat 200
+/sync/* https://acc.aaaaaxin.cn/sync/:splat 200
+/recycle/* https://acc.aaaaaxin.cn/recycle/:splat 200
