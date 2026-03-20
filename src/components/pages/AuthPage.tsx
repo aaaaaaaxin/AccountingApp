@@ -6,6 +6,7 @@ export function AuthPage(props: { onAuthed: (username: string) => void }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [inviteCode, setInviteCode] = useState('')
+  const [setupKey, setSetupKey] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -68,6 +69,13 @@ export function AuthPage(props: { onAuthed: (username: string) => void }) {
                 placeholder="邀请码"
                 style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #ddd' }}
               />
+              <input
+                value={setupKey}
+                onChange={(e) => setSetupKey(e.target.value)}
+                placeholder="初始化密钥（可选，用于获取初始邀请码）"
+                type="password"
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #ddd' }}
+              />
               <button
                 type="button"
                 disabled={submitting}
@@ -76,7 +84,7 @@ export function AuthPage(props: { onAuthed: (username: string) => void }) {
                   setSubmitting(true)
                   setError(null)
                   try {
-                    const boot = await apiPost<{ code: string }>('/admin/invites/bootstrap')
+                    const boot = await apiPost<{ code: string }>('/admin/invites/bootstrap', {}, setupKey ? { 'x-setup-key': setupKey } : undefined)
                     setInviteCode(boot.code)
                   } catch (e) {
                     setError(e instanceof Error ? e.message : '获取邀请码失败')
