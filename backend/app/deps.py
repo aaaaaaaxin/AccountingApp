@@ -74,6 +74,7 @@ def require_csrf(
 
 
 def set_auth_cookies(response: Response, session_token: str, csrf_token: str) -> None:
+  domain = settings.cookie_domain.strip() or None
   response.set_cookie(
     key="session",
     value=session_token,
@@ -81,6 +82,7 @@ def set_auth_cookies(response: Response, session_token: str, csrf_token: str) ->
     secure=settings.cookie_secure,
     samesite=settings.cookie_samesite,
     path="/",
+    domain=domain,
   )
   response.set_cookie(
     key="csrf_token",
@@ -89,9 +91,11 @@ def set_auth_cookies(response: Response, session_token: str, csrf_token: str) ->
     secure=settings.cookie_secure,
     samesite=settings.cookie_samesite,
     path="/",
+    domain=domain,
   )
 
 
 def clear_auth_cookies(response: Response) -> None:
-  response.delete_cookie(key="session", path="/")
-  response.delete_cookie(key="csrf_token", path="/")
+  domain = settings.cookie_domain.strip() or None
+  response.delete_cookie(key="session", path="/", domain=domain)
+  response.delete_cookie(key="csrf_token", path="/", domain=domain)

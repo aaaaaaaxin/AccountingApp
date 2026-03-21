@@ -20,6 +20,8 @@ export function createSyncScheduler(args: {
   let timer: number | null = null
   let backoffMs = 0
   let nextAllowedAt = 0
+  let authBlocked = false
+  let lastErrorAt = 0
 
   const clearTimer = () => {
     if (timer !== null) {
@@ -34,6 +36,15 @@ export function createSyncScheduler(args: {
     timer = window.setTimeout(() => void runOnce(), delay)
   }
 
+  const shouldPauseForAuth = (e: unknown): string | null => {
+    if (!e || typeof e !== 'object') return null
+    const status = (e as any).status
+    const detail = (e as any).detail
+    if (status === 401) return '未登录'
+    if (status === 403 && (detail === 'csrf_required' || detail === 'csrf_invalid')) return '需要重新登录'
+    return null
+  }
+
   const recordFailure = (message: string) => {
     backoffMs = backoffMs ? Math.min(maxBackoffMs, backoffMs * 2) : 2_000
     nextAllowedAt = Date.now() + backoffMs
@@ -45,6 +56,10 @@ export function createSyncScheduler(args: {
     clearTimer()
     if (inFlight) {
       pending = true
+      return
+    }
+    if (authBlocked) {
+      pending = false
       return
     }
     if (Date.now() < nextAllowedAt) {
@@ -62,6 +77,7 @@ export function createSyncScheduler(args: {
       const result = await args.run()
       backoffMs = 0
       nextAllowedAt = 0
+      authBlocked = false
       const now = new Date()
       args.onStatus({
         status: 'ok',
@@ -72,7 +88,23 @@ export function createSyncScheduler(args: {
         await args.onSuccess(result)
       }
     } catch (e) {
-      recordFailure(e instanceof Error ? e.message : '同步失败')
+      const authMsg = shouldPauseForAuth(e)
+      if (authMsg) {
+        authBlocked = true
+        backoffMs = 0
+        nextAllowedAt = 0
+        args.onStatus({ status: 'error', message: authMsg })
+        return
+      }
+      const nowMs = Date.now()
+      if (nowMs - lastErrorAt > 4_000) {
+        lastErrorAt = nowMs
+        recordFailure(e instanceof Error ? e.message : '同步失败')
+      } else {
+        backoffMs = backoffMs ? Math.min(maxBackoffMs, backoffMs * 2) : 2_000
+        nextAllowedAt = Date.now() + backoffMs
+        scheduleAt(nextAllowedAt)
+      }
     } finally {
       inFlight = false
       if (pending) {
@@ -83,6 +115,7 @@ export function createSyncScheduler(args: {
   }
 
   const trigger = (opts?: { force?: boolean }) => {
+    authBlocked = false
     pending = true
     if (opts?.force) {
       backoffMs = 0
@@ -101,4 +134,3 @@ export function createSyncScheduler(args: {
 
   return { trigger, stop }
 }
-

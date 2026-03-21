@@ -14,6 +14,7 @@ class Settings:
   db_path: str = os.environ.get("ACCOUNTING_DB_PATH", "./data/accounting.sqlite3")
   cookie_secure: bool = _get_bool_env("ACCOUNTING_COOKIE_SECURE", True)
   cookie_samesite: str = os.environ.get("ACCOUNTING_COOKIE_SAMESITE", "lax")
+  cookie_domain: str = os.environ.get("ACCOUNTING_COOKIE_DOMAIN", "")
   session_ttl_days: int = int(os.environ.get("ACCOUNTING_SESSION_TTL_DAYS", "14"))
   setup_key: str = os.environ.get("ACCOUNTING_SETUP_KEY", "")
   oplog_retention_days: int = int(os.environ.get("ACCOUNTING_OPLOG_RETENTION_DAYS", "90"))

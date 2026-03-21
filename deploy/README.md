@@ -26,6 +26,7 @@
    - `CLOUDFLARED_TOKEN`：必填
    - `ACCOUNTING_SETUP_KEY`：可选，用于首次创建邀请码时的安全限制（建议填一个随机字符串）
    - `ACCOUNTING_CORS_ORIGINS`：建议填写前端域名（多个用逗号分隔），用于限制跨域访问（例如 `https://acc.example.com`）
+   - `ACCOUNTING_COOKIE_DOMAIN`：当前端与后端使用子域名（例如 `app.example.com` + `acc.example.com`）时，建议设置为 `.example.com`，用于让 `csrf_token` 可被前端读取并通过 `x-csrf-token` 发送（否则同步/退出登录可能报 `csrf_required`）
 4. 启动项目
 
 启动后：
