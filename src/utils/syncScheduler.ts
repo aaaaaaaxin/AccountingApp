@@ -42,6 +42,7 @@ export function createSyncScheduler(args: {
     const detail = (e as any).detail
     if (status === 401) return '未登录'
     if (status === 403 && (detail === 'csrf_required' || detail === 'csrf_invalid')) return '需要重新登录'
+    if (status === 400 && (detail === 'delete_not_supported' || detail === 'unknown_entity_type')) return '后端未更新，暂不支持账本删除同步'
     return null
   }
 
