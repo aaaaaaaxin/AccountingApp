@@ -420,12 +420,12 @@ async function updateLedger(id: string, updates: Partial<Ledger>): Promise<Ledge
 
 async function deleteLedger(id: string): Promise<boolean> {
   const db = await dbPromise;
-  const tx = db.transaction(['ledgers', 'categories', 'transactions', 'templates', 'tags'], 'readwrite');
   const tombstones = await getPendingLedgerDeletes()
   if (!tombstones.some((x) => x.id === id)) {
     tombstones.push({ id, deletedAt: new Date().toISOString() })
     await setPendingLedgerDeletes(tombstones)
   }
+  const tx = db.transaction(['ledgers', 'categories', 'transactions', 'templates', 'tags'], 'readwrite');
   
   const ledgerStore = tx.objectStore('ledgers');
   await ledgerStore.delete(id);
