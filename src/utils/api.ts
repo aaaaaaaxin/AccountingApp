@@ -5,7 +5,7 @@ function getCookie(name: string): string | null {
   return m ? decodeURIComponent(m[1]) : null
 }
 
-function resolveApiUrl(path: string): string {
+export function resolveBackendUrl(path: string): string {
   const envBase = import.meta.env.VITE_BACKEND_URL as string | undefined
   const base =
     envBase && envBase.trim()
@@ -32,7 +32,7 @@ export async function apiRequest<T>(path: string, init?: { method?: string; body
     }
   }
 
-  const res = await fetch(resolveApiUrl(path), {
+  const res = await fetch(resolveBackendUrl(path), {
     method,
     credentials: 'include',
     headers,

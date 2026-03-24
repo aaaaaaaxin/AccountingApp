@@ -22,9 +22,9 @@ function App() {
   const dialog = useAppDialog()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [displayCategories, setDisplayCategories] = useState<Category[]>([])
   const [ledgers, setLedgers] = useState<Ledger[]>([])
   const [selectedLedgerIds, setSelectedLedgerIds] = useState<string[]>([])
+  const [accountsTransactions, setAccountsTransactions] = useState<Transaction[]>([])
   const [tags, setTags] = useState<string[]>([])
   const [templates, setTemplates] = useState<Template[]>([])
   const [lastTransactionData, setLastTransactionData] = useState<{
@@ -97,26 +97,28 @@ function App() {
     return { income, expense, balance: income - expense }
   }
 
-  const refreshAggregatedData = async (ledgerIds: string[]) => {
-    if (ledgerIds.length === 0) return
-    const [txGroups, catGroups] = await Promise.all([
-      Promise.all(ledgerIds.map((id) => storage.getTransactions(id))),
-      Promise.all(ledgerIds.map((id) => storage.getCategories(id))),
-    ])
-    const txs = txGroups.flat()
+  const sortTransactionsNewestFirst = (txs: Transaction[]) => {
     txs.sort((a, b) => {
       if (a.date !== b.date) return b.date.localeCompare(a.date)
       return b.createdAt.localeCompare(a.createdAt)
     })
-    const catMap = new Map<string, Category>()
-    for (const group of catGroups) {
-      for (const c of group) catMap.set(c.id, c)
-    }
+  }
+
+  const refreshCurrentLedgerTransactions = async (ledgerId: string) => {
+    const txs = await storage.getTransactions(ledgerId)
+    sortTransactionsNewestFirst(txs)
     setTransactions(txs)
-    setDisplayCategories(Array.from(catMap.values()))
     const now = new Date()
     setMonthlyStats(computeMonthlyStatsFromTransactions(txs, now.getFullYear(), now.getMonth() + 1))
     setVisibleTransactions(ITEMS_PER_PAGE)
+  }
+
+  const refreshAccountsTransactions = async (ledgerIds: string[]) => {
+    if (ledgerIds.length === 0) return
+    const groups = await Promise.all(ledgerIds.map((id) => storage.getTransactions(id)))
+    const txs = groups.flat()
+    sortTransactionsNewestFirst(txs)
+    setAccountsTransactions(txs)
   }
 
   useEffect(() => {
@@ -128,8 +130,16 @@ function App() {
   }, [selectedLedgerIds])
 
   const refreshAfterSync = async () => {
-    const ledgerId = currentLedgerIdRef.current
+    const allLedgers = await storage.getLedgers()
+    setLedgers(allLedgers)
+
+    let ledgerId = currentLedgerIdRef.current
+    if (!ledgerId) {
+      ledgerId = await storage.getCurrentLedgerId()
+      setCurrentLedgerId(ledgerId)
+    }
     if (!ledgerId) return
+
     const [cats, allTags, allTemplates] = await Promise.all([
       storage.getCategories(ledgerId),
       storage.getTags(ledgerId),
@@ -138,8 +148,11 @@ function App() {
     setCategories(cats)
     setTags(allTags)
     setTemplates(allTemplates)
+
+    await refreshCurrentLedgerTransactions(ledgerId)
     const ids = selectedLedgerIdsRef.current.length ? selectedLedgerIdsRef.current : [ledgerId]
-    await refreshAggregatedData(ids)
+    setSelectedLedgerIds(ids)
+    await refreshAccountsTransactions(ids)
     await checkScaleHint()
   }
 
@@ -175,9 +188,9 @@ function App() {
         setLedgers(allLedgers)
         setTags(allTags)
         setTemplates(allTemplates)
-        setVisibleTransactions(ITEMS_PER_PAGE)
+        await refreshCurrentLedgerTransactions(ledgerId)
         setSelectedLedgerIds([ledgerId])
-        await refreshAggregatedData([ledgerId])
+        await refreshAccountsTransactions([ledgerId])
         await checkScaleHint()
       }
     } catch (e) {
@@ -196,10 +209,10 @@ function App() {
     setCategories(cats)
     setTags(allTags)
     setTemplates(allTemplates)
-    setVisibleTransactions(ITEMS_PER_PAGE)
     const nextSelected = selectedLedgerIds.includes(ledgerId) ? selectedLedgerIds : [ledgerId, ...selectedLedgerIds]
     setSelectedLedgerIds(nextSelected)
-    await refreshAggregatedData(nextSelected)
+    await refreshCurrentLedgerTransactions(ledgerId)
+    await refreshAccountsTransactions(nextSelected.length ? nextSelected : [ledgerId])
   }
 
   const toggleLedgerSelection = async (ledgerId: string) => {
@@ -207,7 +220,7 @@ function App() {
     const next = exists ? selectedLedgerIds.filter((x) => x !== ledgerId) : [...selectedLedgerIds, ledgerId]
     const finalNext = next.length ? next : [ledgerId]
     setSelectedLedgerIds(finalNext)
-    await refreshAggregatedData(finalNext)
+    await refreshAccountsTransactions(finalNext)
   }
 
   const loadMoreTransactions = () => {
@@ -248,18 +261,27 @@ function App() {
     const allLedgers = await storage.getLedgers()
     setLedgers(allLedgers)
     const nextSelected = selectedLedgerIds.filter((id) => id !== ledgerId)
-    setSelectedLedgerIds(nextSelected.length ? nextSelected : allLedgers.length ? [allLedgers[0].id] : [])
-    if (nextSelected.length) {
-      await refreshAggregatedData(nextSelected)
-    } else if (allLedgers.length) {
-      await refreshAggregatedData([allLedgers[0].id])
-    } else {
+
+    if (allLedgers.length === 0) {
+      setSelectedLedgerIds([])
+      setAccountsTransactions([])
+      setCurrentLedgerId(null)
+      setCategories([])
+      setTags([])
+      setTemplates([])
       setTransactions([])
-      setDisplayCategories([])
       setMonthlyStats({ income: 0, expense: 0, balance: 0 })
+      requestSync()
+      return
     }
-    if (currentLedgerId === ledgerId && allLedgers.length > 0) {
-      await switchLedger(allLedgers[0].id)
+
+    const fallbackLedgerId = allLedgers[0].id
+    const finalSelected = nextSelected.length ? nextSelected : [fallbackLedgerId]
+    setSelectedLedgerIds(finalSelected)
+    await refreshAccountsTransactions(finalSelected)
+
+    if (currentLedgerId === ledgerId) {
+      await switchLedger(fallbackLedgerId)
     }
     requestSync()
   }
@@ -513,7 +535,10 @@ function App() {
       }
     }
 
-    await refreshAggregatedData(selectedLedgerIds.length ? selectedLedgerIds : [currentLedgerId])
+    await refreshCurrentLedgerTransactions(currentLedgerId)
+    const ids = selectedLedgerIds.length ? selectedLedgerIds : [currentLedgerId]
+    setSelectedLedgerIds(ids)
+    await refreshAccountsTransactions(ids)
     requestSync()
   }
 
@@ -533,7 +558,10 @@ function App() {
   const deleteTransactionNoConfirm = async (id: string) => {
     if (!currentLedgerId) return
     await storage.deleteTransaction(id)
-    await refreshAggregatedData(selectedLedgerIds.length ? selectedLedgerIds : [currentLedgerId])
+    await refreshCurrentLedgerTransactions(currentLedgerId)
+    const ids = selectedLedgerIds.length ? selectedLedgerIds : [currentLedgerId]
+    setSelectedLedgerIds(ids)
+    await refreshAccountsTransactions(ids)
     requestSync()
   }
 
@@ -581,7 +609,10 @@ function App() {
     await storage.renameTag(currentLedgerId, oldName, next)
     const allTags = await storage.getTags(currentLedgerId)
     setTags(allTags)
-    await refreshAggregatedData(selectedLedgerIds.length ? selectedLedgerIds : [currentLedgerId])
+    await refreshCurrentLedgerTransactions(currentLedgerId)
+    const ids = selectedLedgerIds.length ? selectedLedgerIds : [currentLedgerId]
+    setSelectedLedgerIds(ids)
+    await refreshAccountsTransactions(ids)
     setFormData((prev) => ({
       ...prev,
       tags: prev.tags.map((t) => (t === oldName ? next : t)),
@@ -595,7 +626,10 @@ function App() {
     await storage.deleteTagAndCleanup(currentLedgerId, tagName)
     const allTags = await storage.getTags(currentLedgerId)
     setTags(allTags)
-    await refreshAggregatedData(selectedLedgerIds.length ? selectedLedgerIds : [currentLedgerId])
+    await refreshCurrentLedgerTransactions(currentLedgerId)
+    const ids = selectedLedgerIds.length ? selectedLedgerIds : [currentLedgerId]
+    setSelectedLedgerIds(ids)
+    await refreshAccountsTransactions(ids)
     setFormData((prev) => ({ ...prev, tags: prev.tags.filter((t) => t !== tagName) }))
     setLastTransactionData((prev) => (prev ? { ...prev, tags: prev.tags.filter((t) => t !== tagName) } : prev))
     dialog.toast({ message: '已删除标签', kind: 'success' })
@@ -1039,7 +1073,7 @@ function App() {
               <HomePage
                 monthlyStats={monthlyStats}
                 transactions={filteredTransactions}
-                categories={displayCategories}
+                categories={categories}
                 paymentMethods={PAYMENT_METHODS}
                 searchQuery={searchQuery}
                 visibleTransactions={visibleTransactions}
@@ -1056,7 +1090,7 @@ function App() {
               header={statsHeader}
               monthlyStats={monthlyStats}
               transactions={transactions}
-              categories={displayCategories}
+              categories={categories}
               paymentMethods={PAYMENT_METHODS}
             />
           )}
@@ -1064,7 +1098,7 @@ function App() {
             <ReportPage
               header={statsHeader}
               transactions={transactions}
-              categories={displayCategories}
+              categories={categories}
               paymentMethods={PAYMENT_METHODS}
               onOpenDetail={(tx) => setDetailTransaction(tx)}
             />
@@ -1072,7 +1106,7 @@ function App() {
 
           {activeTab === 'accounts' && (
             <AccountsPage
-              transactions={transactions}
+              transactions={accountsTransactions}
               paymentMethods={PAYMENT_METHODS}
               ledgers={ledgers}
               selectedLedgerIds={selectedLedgerIds}
@@ -1109,7 +1143,7 @@ function App() {
         <TransactionDetailSheet
           open={!!detailTransaction}
           transaction={detailTransaction}
-          category={displayCategories.find((c) => c.id === detailTransaction.categoryId)}
+          category={categories.find((c) => c.id === detailTransaction.categoryId)}
           paymentMethodName={PAYMENT_METHODS.find((m) => m.id === detailTransaction.paymentMethod)?.name}
           onClose={() => setDetailTransaction(null)}
           onEdit={() => {

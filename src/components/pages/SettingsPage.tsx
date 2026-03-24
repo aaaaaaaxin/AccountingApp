@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { storage } from '../../utils/storage'
+import { resolveBackendUrl } from '../../utils/api'
 
 export function SettingsPage(props: {
   open: boolean
@@ -90,7 +91,7 @@ export function SettingsPage(props: {
               </div>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 <a
-                  href="/admin/invites/page"
+                  href={resolveBackendUrl('/admin/invites/page')}
                   target="_blank"
                   rel="noreferrer"
                   style={{ padding: '8px 12px', borderRadius: '10px', border: '1px solid #ddd', background: '#fff', textDecoration: 'none', color: '#1677ff' }}
@@ -273,4 +274,3 @@ export function SettingsPage(props: {
     </div>
   )
 }
-
