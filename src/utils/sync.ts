@@ -73,6 +73,11 @@ async function applyRemoteOp(op: PulledOp): Promise<void> {
     return
   }
 
+  if (op.op_type === 'delete' && op.entity_type === 'ledger') {
+    await storage.deleteLedgerRemote(op.entity_id)
+    return
+  }
+
   if (op.entity_type === 'transaction' && op.op_type === 'delete') {
     const deletedAt = op.payload?.deleted_at || op.payload?.deletedAt || null
     const existing = await storage.getTransaction(op.entity_id)
@@ -108,6 +113,18 @@ async function pushLocalSnapshot(): Promise<number> {
   let totalPushed = 0
 
   const chunks: any[] = []
+  const pendingLedgerDeletes = await storage.getPendingLedgerDeletes()
+  if (pendingLedgerDeletes.length) {
+    for (const d of pendingLedgerDeletes) {
+      chunks.push({
+        entity_type: 'ledger',
+        entity_id: d.id,
+        op_type: 'delete',
+        payload: null,
+        idempotency_key: `ledger:${d.id}:delete:${d.deletedAt}`,
+      })
+    }
+  }
   const purgeToken = await storage.getPendingPurgeToken()
   if (purgeToken) {
     chunks.push({
@@ -163,6 +180,9 @@ async function pushLocalSnapshot(): Promise<number> {
     if (purgeToken && batch.some((x) => x.op_type === 'purge_deleted' && x.idempotency_key === `purge_deleted:${purgeToken}`)) {
       await storage.setPendingPurgeToken(null)
     }
+  }
+  if (pendingLedgerDeletes.length) {
+    await storage.setPendingLedgerDeletes([])
   }
 
   return totalPushed

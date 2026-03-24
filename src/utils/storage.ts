@@ -238,6 +238,23 @@ async function setPendingPurgeToken(token: string | null): Promise<void> {
   await setMetadata('pendingPurgeToken', token)
 }
 
+async function getPendingLedgerDeletes(): Promise<{ id: string; deletedAt: string }[]> {
+  const v = await getMetadata('pendingLedgerDeletes')
+  if (!Array.isArray(v)) return []
+  const out: { id: string; deletedAt: string }[] = []
+  for (const it of v) {
+    if (!it || typeof it !== 'object') continue
+    const id = (it as any).id
+    const deletedAt = (it as any).deletedAt
+    if (typeof id === 'string' && typeof deletedAt === 'string') out.push({ id, deletedAt })
+  }
+  return out
+}
+
+async function setPendingLedgerDeletes(items: { id: string; deletedAt: string }[]): Promise<void> {
+  await setMetadata('pendingLedgerDeletes', items)
+}
+
 async function upsertLedgerRemote(ledger: Ledger): Promise<void> {
   await ensureInit()
   const db = await dbPromise
@@ -272,6 +289,28 @@ async function deleteTransactionRemote(id: string): Promise<void> {
   await ensureInit()
   const db = await dbPromise
   await db.delete('transactions', id)
+}
+
+async function deleteLedgerRemote(ledgerId: string): Promise<void> {
+  await ensureInit()
+  const db = await dbPromise
+  const tx = db.transaction(['ledgers', 'categories', 'transactions', 'templates', 'tags'], 'readwrite')
+
+  await tx.objectStore('ledgers').delete(ledgerId)
+
+  const categories = await tx.objectStore('categories').index('by-ledgerId').getAll(ledgerId)
+  for (const c of categories) await tx.objectStore('categories').delete(c.id)
+
+  const templates = await tx.objectStore('templates').index('by-ledgerId').getAll(ledgerId)
+  for (const t of templates) await tx.objectStore('templates').delete(t.id)
+
+  const tags = await tx.objectStore('tags').index('by-ledgerId').getAll(ledgerId)
+  for (const t of tags) await tx.objectStore('tags').delete(t.id)
+
+  const transactions = await tx.objectStore('transactions').index('by-ledgerId').getAll(ledgerId)
+  for (const t of transactions) await tx.objectStore('transactions').delete(t.id)
+
+  await tx.done
 }
 
 async function applyBaselinePayload(payload: any): Promise<void> {
@@ -382,6 +421,11 @@ async function updateLedger(id: string, updates: Partial<Ledger>): Promise<Ledge
 async function deleteLedger(id: string): Promise<boolean> {
   const db = await dbPromise;
   const tx = db.transaction(['ledgers', 'categories', 'transactions', 'templates', 'tags'], 'readwrite');
+  const tombstones = await getPendingLedgerDeletes()
+  if (!tombstones.some((x) => x.id === id)) {
+    tombstones.push({ id, deletedAt: new Date().toISOString() })
+    await setPendingLedgerDeletes(tombstones)
+  }
   
   const ledgerStore = tx.objectStore('ledgers');
   await ledgerStore.delete(id);
@@ -859,6 +903,8 @@ export const storage = {
   purgeDeletedTransactionsBeforeLocal,
   getPendingPurgeToken,
   setPendingPurgeToken,
+  getPendingLedgerDeletes,
+  setPendingLedgerDeletes,
   getSyncVersion,
   setSyncVersion,
   upsertLedgerRemote,
@@ -867,5 +913,6 @@ export const storage = {
   upsertTagRemote,
   upsertTransactionRemote,
   deleteTransactionRemote,
+  deleteLedgerRemote,
   applyBaselinePayload,
 };
