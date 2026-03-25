@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 export function AccountsPage(props: {
   transactions: import('../../types').Transaction[]
   paymentMethods: { id: string; name: string }[]
@@ -6,11 +8,34 @@ export function AccountsPage(props: {
   onToggleLedger: (ledgerId: string) => void | Promise<void>
   onOpenSettings: () => void
 }) {
+  const parsePaymentName = (raw: string) => {
+    const m = raw.trim().match(/^(\S+)\s+(.*)$/)
+    if (!m) return { icon: raw.trim().slice(0, 1) || '💳', label: raw.trim() || '未设置' }
+    return { icon: m[1], label: m[2] || raw.trim() }
+  }
+
+  const getPaymentVisual = (id: string, rawName: string) => {
+    const { icon, label } = parsePaymentName(rawName)
+    const base = {
+      cash: { bg: 'rgba(39, 174, 96, 0.12)', border: 'rgba(39, 174, 96, 0.18)', fg: '#1e8449' },
+      wechat: { bg: 'rgba(46, 204, 113, 0.12)', border: 'rgba(46, 204, 113, 0.18)', fg: '#27ae60' },
+      alipay: { bg: 'rgba(52, 152, 219, 0.12)', border: 'rgba(52, 152, 219, 0.18)', fg: '#2980b9' },
+      card: { bg: 'rgba(155, 89, 182, 0.12)', border: 'rgba(155, 89, 182, 0.18)', fg: '#8e44ad' },
+      credit: { bg: 'rgba(241, 196, 15, 0.14)', border: 'rgba(241, 196, 15, 0.22)', fg: '#b8860b' },
+    } as Record<string, { bg: string; border: string; fg: string }>
+    const theme = base[id] || { bg: 'rgba(22, 119, 255, 0.12)', border: 'rgba(22, 119, 255, 0.18)', fg: '#1677ff' }
+    return { icon, label, ...theme }
+  }
+
   const selectedLedgerCount = props.selectedLedgerIds.length
   const selectedLedgerNames = props.ledgers
     .filter((l) => props.selectedLedgerIds.includes(l.id))
     .map((l) => l.name)
     .join('、')
+  const [ledgerSummaryExpanded, setLedgerSummaryExpanded] = useState(false)
+  const ledgerSummaryText =
+    selectedLedgerCount === 0 ? '未选择账本' : `已选 ${selectedLedgerCount} 个账本：${selectedLedgerNames || '—'}`
+  const ledgerSummaryNeedFold = ledgerSummaryText.length >= 22
 
   const lifetimeIncome = props.transactions.reduce((sum, tx) => sum + (tx.type === 'income' ? tx.amount : 0), 0)
   const lifetimeExpense = props.transactions.reduce((sum, tx) => sum + (tx.type === 'expense' ? tx.amount : 0), 0)
@@ -26,13 +51,23 @@ export function AccountsPage(props: {
 
   return (
     <div className="accounts-page">
-      <section className="card card-pad accounts-card">
+      <section className="card card-pad accounts-card accounts-card--hero">
         <div className="accounts-card__top">
           <div>
             <div className="accounts-card__title">资产概览</div>
-            <div className="accounts-card__sub">
-              {selectedLedgerCount === 0 ? '未选择账本' : `已选 ${selectedLedgerCount} 个账本：${selectedLedgerNames}`}
-            </div>
+            <button
+              type="button"
+              className={`accounts-card__sub accounts-subbtn ${ledgerSummaryExpanded ? 'accounts-subbtn--open' : ''}`}
+              onClick={() => {
+                if (!ledgerSummaryNeedFold) return
+                setLedgerSummaryExpanded((v) => !v)
+              }}
+              style={{ cursor: ledgerSummaryNeedFold ? 'pointer' : 'default' }}
+              aria-label="已选账本"
+            >
+              <span className={ledgerSummaryNeedFold && !ledgerSummaryExpanded ? 'accounts-subbtn__text--clamp' : ''}>{ledgerSummaryText}</span>
+              {ledgerSummaryNeedFold && <span className="accounts-subbtn__chev">{ledgerSummaryExpanded ? '⌃' : '⌄'}</span>}
+            </button>
           </div>
           <button type="button" className="accounts-gear" onClick={props.onOpenSettings} aria-label="打开设置">
             ⚙︎
@@ -79,9 +114,16 @@ export function AccountsPage(props: {
             {paymentSummaries.map((acc) => (
               <div key={acc.id} className="accounts-item">
                 <div className="accounts-item__left">
-                  <div className="accounts-item__icon">{acc.name.slice(0, 1)}</div>
+                  {(() => {
+                    const v = getPaymentVisual(acc.id, acc.name)
+                    return (
+                      <div className="accounts-item__icon" style={{ background: v.bg, borderColor: v.border, color: v.fg }}>
+                        {v.icon}
+                      </div>
+                    )
+                  })()}
                   <div className="accounts-item__meta">
-                    <div className="accounts-item__name">{acc.name}</div>
+                    <div className="accounts-item__name">{getPaymentVisual(acc.id, acc.name).label}</div>
                     <div className="accounts-item__sub">
                       <span className="accounts-pill accounts-pill--in">收入 ¥{acc.income.toFixed(2)}</span>
                       <span className="accounts-pill accounts-pill--out">支出 ¥{acc.expense.toFixed(2)}</span>

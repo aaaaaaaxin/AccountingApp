@@ -781,6 +781,10 @@ body {
   background: #f6f7f9;
 }
 
+.accounts-card--hero {
+  background: linear-gradient(180deg, rgba(22, 119, 255, 0.14), rgba(22, 119, 255, 0.06) 42%, #f6f7f9 100%);
+}
+
 .accounts-card__top {
   display: flex;
   align-items: flex-start;
@@ -801,6 +805,35 @@ body {
   font-weight: 700;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.accounts-subbtn {
+  text-align: left;
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.accounts-subbtn:active {
+  transform: scale(0.99);
+}
+
+.accounts-subbtn__text--clamp {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounts-subbtn__chev {
+  color: var(--muted);
+  font-weight: 900;
+  flex: 0 0 auto;
 }
 
 .accounts-gear {
@@ -901,6 +934,11 @@ body {
   border-radius: 16px;
   border: 1px solid rgba(0, 0, 0, 0.06);
   background: #fff;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.accounts-item:active {
+  transform: scale(0.99);
 }
 
 .accounts-item__left {
