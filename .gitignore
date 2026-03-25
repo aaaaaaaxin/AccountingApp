@@ -24,3 +24,6 @@ __pycache__/
 
 # local requirement docs (keep tracked docs unaffected)
 Requirements/*.md
+
+# stray files created by terminal/pager glitches
+cope; sync init; invite admin link; sync ledger delete*
