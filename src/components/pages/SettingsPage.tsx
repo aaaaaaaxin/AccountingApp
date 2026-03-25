@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { storage } from '../../utils/storage'
 import { resolveBackendUrl } from '../../utils/api'
+import { useAppDialog } from '../common/AppDialogProvider'
 
 export function SettingsPage(props: {
   open: boolean
@@ -13,6 +14,7 @@ export function SettingsPage(props: {
   currentLedgerId: string | null
   onDataChanged: () => void | Promise<void>
 }) {
+  const dialog = useAppDialog()
   const [recycleOpen, setRecycleOpen] = useState(false)
   const [deletedItems, setDeletedItems] = useState<import('../../types').Transaction[]>([])
   const [recycleLoading, setRecycleLoading] = useState(false)
@@ -556,7 +558,13 @@ export function SettingsPage(props: {
                   <button
                     type="button"
                     onClick={async () => {
-                      if (!confirm('将永久删除回收站内的所有数据，删除后不可恢复。确定继续吗？')) return
+                      const ok = await dialog.confirm({
+                        title: '彻底删除回收站',
+                        message: '将永久删除回收站内的所有数据，删除后不可恢复。确定继续吗？',
+                        okText: '确定删除',
+                        cancelText: '取消',
+                      })
+                      if (!ok) return
                       await storage.setPendingPurgeToken(new Date().toISOString())
                       await storage.purgeDeletedTransactionsLocal()
                       await refreshRecycle()
