@@ -61,11 +61,16 @@ function App() {
   const [syncStatus, setSyncStatus] = useState<{ status: 'idle' | 'syncing' | 'ok' | 'error'; message?: string; lastSyncAt?: string; lastResult?: { pulled: number; pushed: number; version: number } }>({
     status: 'idle',
   })
+  const [initialSyncStartedAt, setInitialSyncStartedAt] = useState<number | null>(null)
+  const [initialSyncTick, setInitialSyncTick] = useState(0)
+  const [initialSyncDismissed, setInitialSyncDismissed] = useState(false)
+  const initialSyncToastShownRef = useRef(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const currentLedgerIdRef = useRef<string | null>(null)
   const selectedLedgerIdsRef = useRef<string[]>([])
   const syncSchedulerRef = useRef<ReturnType<typeof createSyncScheduler> | null>(null)
   const scaleWarnLevelRef = useRef<0 | 1 | 2>(0)
+  const initialSyncAutoTriggeredRef = useRef(false)
   
   const PAYMENT_METHODS = [
     { id: 'cash', name: '💵 现金' },
@@ -350,6 +355,46 @@ function App() {
     }
     requestSync({ force: false })
   }, [authUsername])
+
+  useEffect(() => {
+    if (!authUsername) {
+      setInitialSyncStartedAt(null)
+      setInitialSyncDismissed(false)
+      initialSyncToastShownRef.current = false
+      initialSyncAutoTriggeredRef.current = false
+      return
+    }
+    if (ledgers.length === 0) {
+      if (initialSyncStartedAt === null) setInitialSyncStartedAt(Date.now())
+      if (!initialSyncAutoTriggeredRef.current) {
+        initialSyncAutoTriggeredRef.current = true
+        requestSync({ force: true })
+      }
+      return
+    }
+    setInitialSyncStartedAt(null)
+    setInitialSyncDismissed(false)
+    initialSyncToastShownRef.current = false
+    initialSyncAutoTriggeredRef.current = false
+  }, [authUsername, ledgers.length, initialSyncStartedAt])
+
+  useEffect(() => {
+    if (!authUsername) return
+    if (ledgers.length === 0) {
+      initialSyncToastShownRef.current = false
+      return
+    }
+    if (initialSyncToastShownRef.current) return
+    initialSyncToastShownRef.current = true
+    dialog.toast({ message: '首次同步完成，账本已加载', kind: 'success' })
+  }, [authUsername, ledgers.length, dialog])
+
+  useEffect(() => {
+    if (!authUsername) return
+    if (ledgers.length > 0) return
+    const timer = window.setInterval(() => setInitialSyncTick((x) => x + 1), 1000)
+    return () => window.clearInterval(timer)
+  }, [authUsername, ledgers.length])
 
   useEffect(() => {
     if (!authUsername) return
@@ -1065,8 +1110,211 @@ function App() {
     )
   }
 
+  const initialSyncBlocking = ledgers.length === 0
+  const initialSyncNowMs = Date.now() + initialSyncTick * 0
+  const initialSyncWaitedSec = initialSyncBlocking && initialSyncStartedAt ? Math.floor((initialSyncNowMs - initialSyncStartedAt) / 1000) : 0
+  const initialSyncOverlayOpen = initialSyncBlocking && !initialSyncDismissed
+
   return (
     <div className="app-shell">
+      {initialSyncBlocking && initialSyncDismissed && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1900,
+            background: syncStatus.status === 'error' ? '#fff3f2' : '#eef6ff',
+            borderBottom: '1px solid #eee',
+            padding: '10px 12px',
+          }}
+        >
+          <div style={{ maxWidth: '980px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '13px', color: '#2c3e50' }}>
+              <span style={{ fontWeight: 900 }}>首次同步：</span>
+              <span style={{ fontWeight: 700 }}>
+                {syncStatus.status === 'syncing' ? '同步中' : syncStatus.status === 'error' ? '失败' : syncStatus.status === 'ok' ? '已同步' : '等待同步'}
+              </span>
+              <span style={{ marginLeft: '8px', color: '#666' }}>已等待 {initialSyncWaitedSec}s</span>
+              {syncStatus.message && <span style={{ marginLeft: '10px', color: '#d63031' }}>{syncStatus.message}</span>}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => requestSync({ force: true })}
+                disabled={syncStatus.status === 'syncing'}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '10px',
+                  border: '1px solid #ddd',
+                  background: '#fff',
+                  cursor: syncStatus.status === 'syncing' ? 'not-allowed' : 'pointer',
+                  opacity: syncStatus.status === 'syncing' ? 0.7 : 1,
+                }}
+              >
+                立即同步
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await apiPost('/auth/logout', {})
+                  } catch {
+                  } finally {
+                    setAuthUsername(null)
+                  }
+                }}
+                style={{ padding: '6px 10px', borderRadius: '10px', border: 'none', background: '#1677ff', color: '#fff', cursor: 'pointer' }}
+              >
+                退出登录
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {initialSyncOverlayOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '18px',
+            zIndex: 2000,
+          }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div style={{ width: '100%', maxWidth: '520px', background: '#fff', borderRadius: '16px', border: '1px solid #eee', padding: '16px' }}>
+            <div style={{ fontWeight: 900, fontSize: '16px' }}>首次同步中</div>
+            <div style={{ marginTop: '10px', fontSize: '13px', color: '#666', lineHeight: 1.6 }}>
+              登录成功后需要从服务器拉取账本与数据，首次可能会有短暂等待。
+            </div>
+            <div style={{ marginTop: '10px', height: '6px', borderRadius: '999px', background: '#f0f0f0', overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: syncStatus.status === 'ok' ? '100%' : syncStatus.status === 'syncing' ? '70%' : '35%',
+                  background: syncStatus.status === 'error' ? '#d63031' : '#1677ff',
+                  transition: 'width 260ms ease',
+                }}
+              />
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '13px', color: '#2c3e50' }}>
+              当前状态：{' '}
+              <span style={{ fontWeight: 700 }}>
+                {syncStatus.status === 'syncing' ? '同步中' : syncStatus.status === 'error' ? '失败' : syncStatus.status === 'ok' ? '已同步' : '等待同步'}
+              </span>
+              <span style={{ marginLeft: '8px', color: '#666' }}>已等待 {initialSyncWaitedSec}s</span>
+            </div>
+            {syncStatus.lastResult && (
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
+                拉取 {syncStatus.lastResult.pulled} 条 / 上报 {syncStatus.lastResult.pushed} 条 / 当前版本 {syncStatus.lastResult.version}
+              </div>
+            )}
+            {syncStatus.message && <div style={{ marginTop: '8px', fontSize: '12px', color: '#d63031' }}>{syncStatus.message}</div>}
+            {initialSyncWaitedSec >= 10 && (
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#666', lineHeight: 1.6 }}>
+                如果长时间无法加载，常见原因是网络不稳定、后端未更新或登录态失效。可先点击“立即同步”，仍失败可退出重新登录。
+              </div>
+            )}
+            <div style={{ marginTop: '14px', display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={async () => {
+                  const lines = [
+                    `time=${new Date().toISOString()}`,
+                    `status=${syncStatus.status}`,
+                    syncStatus.message ? `message=${syncStatus.message}` : '',
+                    syncStatus.lastResult ? `pulled=${syncStatus.lastResult.pulled} pushed=${syncStatus.lastResult.pushed} version=${syncStatus.lastResult.version}` : '',
+                    `ledgerCount=${ledgers.length}`,
+                    `currentLedgerId=${currentLedgerId ?? ''}`,
+                    `ua=${navigator.userAgent}`,
+                  ].filter(Boolean)
+                  const text = lines.join('\n')
+                  try {
+                    await navigator.clipboard.writeText(text)
+                    dialog.toast({ message: '已复制排障信息', kind: 'success' })
+                  } catch {
+                    const el = document.createElement('textarea')
+                    el.value = text
+                    el.style.position = 'fixed'
+                    el.style.left = '-9999px'
+                    document.body.appendChild(el)
+                    el.focus()
+                    el.select()
+                    try {
+                      document.execCommand('copy')
+                      dialog.toast({ message: '已复制排障信息', kind: 'success' })
+                    } catch {
+                      dialog.toast({ message: '复制失败', kind: 'error' })
+                    } finally {
+                      document.body.removeChild(el)
+                    }
+                  }
+                }}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '10px',
+                  border: '1px solid #ddd',
+                  background: '#fff',
+                  cursor: 'pointer',
+                }}
+              >
+                复制排障信息
+              </button>
+              <button
+                type="button"
+                onClick={() => requestSync({ force: true })}
+                disabled={syncStatus.status === 'syncing'}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '10px',
+                  border: '1px solid #ddd',
+                  background: '#fff',
+                  cursor: syncStatus.status === 'syncing' ? 'not-allowed' : 'pointer',
+                  opacity: syncStatus.status === 'syncing' ? 0.7 : 1,
+                }}
+              >
+                立即同步
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await apiPost('/auth/logout', {})
+                  } catch {
+                  } finally {
+                    setAuthUsername(null)
+                  }
+                }}
+                style={{ padding: '8px 12px', borderRadius: '10px', border: 'none', background: '#1677ff', color: '#fff', cursor: 'pointer' }}
+              >
+                退出登录
+              </button>
+              <button
+                type="button"
+                onClick={() => setInitialSyncDismissed(true)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '10px',
+                  border: '1px solid #ddd',
+                  background: '#fff',
+                  cursor: 'pointer',
+                }}
+              >
+                先进入应用
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className={`app-content ${activeTab === 'home' ? 'app-content--home-lock' : ''}`}>
         <div className={`container ${activeTab === 'home' ? 'container--home' : ''}`}>
           <header className="header">
