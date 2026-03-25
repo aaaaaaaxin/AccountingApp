@@ -1215,7 +1215,13 @@ function App() {
             </div>
             {syncStatus.lastResult && (
               <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
-                拉取 {syncStatus.lastResult.pulled} 条 / 上报 {syncStatus.lastResult.pushed} 条 / 当前版本 {syncStatus.lastResult.version}
+                {syncStatus.lastResult.pulled === 0 && syncStatus.lastResult.pushed === 0 ? (
+                  <>本次无变更（已是最新） / 当前版本 {syncStatus.lastResult.version}</>
+                ) : (
+                  <>
+                    本次拉取 {syncStatus.lastResult.pulled} 条 / 上报 {syncStatus.lastResult.pushed} 条 / 当前版本 {syncStatus.lastResult.version}
+                  </>
+                )}
               </div>
             )}
             {syncStatus.message && <div style={{ marginTop: '8px', fontSize: '12px', color: '#d63031' }}>{syncStatus.message}</div>}

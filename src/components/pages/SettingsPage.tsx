@@ -148,7 +148,13 @@ export function SettingsPage(props: {
               {props.syncStatus.message && <div style={{ marginTop: '8px', fontSize: '12px', color: '#d63031' }}>{props.syncStatus.message}</div>}
               {props.syncStatus.lastResult && (
                 <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
-                  拉取 {props.syncStatus.lastResult.pulled} 条 / 上报 {props.syncStatus.lastResult.pushed} 条 / 当前版本 {props.syncStatus.lastResult.version}
+                  {props.syncStatus.lastResult.pulled === 0 && props.syncStatus.lastResult.pushed === 0 ? (
+                    <>本次无变更（已是最新） / 当前版本 {props.syncStatus.lastResult.version}</>
+                  ) : (
+                    <>
+                      本次拉取 {props.syncStatus.lastResult.pulled} 条 / 上报 {props.syncStatus.lastResult.pushed} 条 / 当前版本 {props.syncStatus.lastResult.version}
+                    </>
+                  )}
                 </div>
               )}
             </div>
