@@ -122,6 +122,18 @@ def apply_transaction_purge_before(db, before_iso: str) -> int:
   return cur.rowcount
 
 
+def apply_entity_delete(db, entity_type: str, entity_id: str) -> None:
+  table = {
+    "ledger": "ledger",
+    "category": "category",
+    "template": "template",
+    "tag": "tag",
+  }.get(entity_type)
+  if not table:
+    raise HTTPException(status_code=400, detail="delete_not_supported")
+  db.execute(f"DELETE FROM {table} WHERE id = ?", (entity_id,))
+
+
 def transaction_snapshot(db, transaction_id: str) -> dict | None:
   row = db.execute(
     "SELECT id, data, updated_at, deleted_at FROM transactions WHERE id = ?",

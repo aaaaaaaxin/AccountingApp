@@ -131,11 +131,6 @@ async function init() {
   
   if (ledgers.length === 0) {
     await migrateFromLocalStorage();
-    
-    const newLedgers = await db.getAll('ledgers');
-    if (newLedgers.length === 0) {
-      await createDefaultLedger();
-    }
   }
 }
 
@@ -184,6 +179,14 @@ async function createDefaultLedger() {
   const ledger = await createLedger(DEFAULT_LEDGER_NAME);
   await createDefaultCategories(ledger.id);
   return ledger;
+}
+
+async function ensureDefaultLedger(): Promise<Ledger> {
+  const ledgers = await getLedgers()
+  if (ledgers.length > 0) return ledgers[0]
+  const ledger = await createDefaultLedger()
+  await setCurrentLedgerId(ledger.id)
+  return ledger
 }
 
 async function createDefaultCategories(ledgerId: string) {
@@ -871,6 +874,7 @@ export const storage = {
   createLedger,
   updateLedger,
   deleteLedger,
+  ensureDefaultLedger,
   getCurrentLedgerId,
   setCurrentLedgerId,
   createDefaultCategories,

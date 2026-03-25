@@ -10,6 +10,7 @@ from .security import iso_utc, now_utc
 from .settings import settings
 from .sync_compaction import compact_db
 from .sync_core import (
+  apply_entity_delete,
   apply_transaction_delete,
   apply_transaction_purge,
   apply_transaction_purge_before,
@@ -159,10 +160,12 @@ def push(
       if op.op_type in ("upsert", "create", "update"):
         apply_upsert(db, op.entity_type, op.entity_id, op.payload, received_at)
       elif op.op_type == "delete":
-        if op.entity_type != "transaction":
-          raise HTTPException(status_code=400, detail="delete_not_supported")
-        apply_transaction_delete(db, op.entity_id, received_at)
-        update_oplog_payload(db, v, json.dumps({"id": op.entity_id, "deleted_at": received_at}, ensure_ascii=False, separators=(",", ":")))
+        if op.entity_type == "transaction":
+          apply_transaction_delete(db, op.entity_id, received_at)
+          update_oplog_payload(db, v, json.dumps({"id": op.entity_id, "deleted_at": received_at}, ensure_ascii=False, separators=(",", ":")))
+        else:
+          apply_entity_delete(db, op.entity_type, op.entity_id)
+          update_oplog_payload(db, v, json.dumps({"id": op.entity_id, "deleted_at": received_at}, ensure_ascii=False, separators=(",", ":")))
       elif op.op_type == "restore":
         if op.entity_type != "transaction":
           raise HTTPException(status_code=400, detail="restore_not_supported")

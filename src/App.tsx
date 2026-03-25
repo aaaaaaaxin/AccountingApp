@@ -130,7 +130,27 @@ function App() {
   }, [selectedLedgerIds])
 
   const refreshAfterSync = async () => {
-    const allLedgers = await storage.getLedgers()
+    let allLedgers = await storage.getLedgers()
+    if (allLedgers.length === 0) {
+      const created = await storage.ensureDefaultLedger()
+      allLedgers = await storage.getLedgers()
+      setLedgers(allLedgers)
+      setCurrentLedgerId(created.id)
+      setSelectedLedgerIds([created.id])
+      const [cats, allTags, allTemplates] = await Promise.all([
+        storage.getCategories(created.id),
+        storage.getTags(created.id),
+        storage.getTemplates(created.id),
+      ])
+      setCategories(cats)
+      setTags(allTags)
+      setTemplates(allTemplates)
+      await refreshCurrentLedgerTransactions(created.id)
+      await refreshAccountsTransactions([created.id])
+      await checkScaleHint()
+      requestSync({ force: true })
+      return
+    }
     setLedgers(allLedgers)
 
     let ledgerId = currentLedgerIdRef.current
