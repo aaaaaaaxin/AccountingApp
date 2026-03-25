@@ -393,9 +393,21 @@ async function getLedger(id: string): Promise<Ledger | undefined> {
   return db.get('ledgers', id);
 }
 
+function normalizeLedgerName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
 async function createLedger(name: string): Promise<Ledger> {
   const db = await dbPromise;
   const ledgers = await db.getAll('ledgers');
+  const nextName = name.trim()
+  if (!nextName) {
+    throw new Error('账本名称不能为空')
+  }
+  const nextNorm = normalizeLedgerName(nextName)
+  if (ledgers.some((l) => normalizeLedgerName(l.name) === nextNorm)) {
+    throw new Error('账本名称已存在')
+  }
   
   if (ledgers.length >= MAX_LEDGERS) {
     throw new Error(`最多只能创建 ${MAX_LEDGERS} 个账本`);
@@ -404,7 +416,7 @@ async function createLedger(name: string): Promise<Ledger> {
   const now = new Date().toISOString();
   const ledger: Ledger = {
     id: generateId(),
-    name,
+    name: nextName,
     createdAt: now,
     updatedAt: now,
   };
@@ -416,6 +428,18 @@ async function updateLedger(id: string, updates: Partial<Ledger>): Promise<Ledge
   const db = await dbPromise;
   const ledger = await db.get('ledgers', id);
   if (!ledger) return null;
+  if (typeof updates.name === 'string') {
+    const nextName = updates.name.trim()
+    if (!nextName) {
+      throw new Error('账本名称不能为空')
+    }
+    const all = await db.getAll('ledgers')
+    const nextNorm = normalizeLedgerName(nextName)
+    if (all.some((l) => l.id !== id && normalizeLedgerName(l.name) === nextNorm)) {
+      throw new Error('账本名称已存在')
+    }
+    updates = { ...updates, name: nextName }
+  }
   const updated = { ...ledger, ...updates, updatedAt: new Date().toISOString() };
   await db.put('ledgers', updated);
   return updated;
