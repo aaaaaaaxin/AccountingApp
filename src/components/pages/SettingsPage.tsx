@@ -15,11 +15,10 @@ export function SettingsPage(props: {
   onDataChanged: () => void | Promise<void>
 }) {
   const dialog = useAppDialog()
-  const [recycleOpen, setRecycleOpen] = useState(false)
   const [deletedItems, setDeletedItems] = useState<import('../../types').Transaction[]>([])
   const [recycleLoading, setRecycleLoading] = useState(false)
   const [totalCount, setTotalCount] = useState<number | null>(null)
-  const [currentPage, setCurrentPage] = useState<'main' | 'invites'>('main')
+  const [currentPage, setCurrentPage] = useState<'main' | 'invites' | 'recycle'>('main')
   const [inviteLoading, setInviteLoading] = useState(false)
   const [invites, setInvites] = useState<
     Array<{
@@ -37,20 +36,10 @@ export function SettingsPage(props: {
   const [sheetDragY, setSheetDragY] = useState(0)
   const [sheetDragging, setSheetDragging] = useState(false)
   const sheetDragStartYRef = useRef<number | null>(null)
-
-  const [recycleMounted, setRecycleMounted] = useState(false)
-  const [recycleVisible, setRecycleVisible] = useState(false)
-  const [recycleDragY, setRecycleDragY] = useState(0)
-  const [recycleDragging, setRecycleDragging] = useState(false)
-  const recycleDragStartYRef = useRef<number | null>(null)
-  const recycleDragStartTimeRef = useRef<number | null>(null)
-  const recycleDragLastRef = useRef<{ y: number; t: number } | null>(null)
   const sheetContainerRef = useRef<HTMLDivElement | null>(null)
-  const recycleContainerRef = useRef<HTMLDivElement | null>(null)
   const sheetDragStartTimeRef = useRef<number | null>(null)
   const sheetDragLastRef = useRef<{ y: number; t: number } | null>(null)
   const sheetCloseInFlightRef = useRef(false)
-  const recycleCloseInFlightRef = useRef(false)
 
   const refreshRecycle = async () => {
     if (!props.currentLedgerId) return
@@ -74,12 +63,14 @@ export function SettingsPage(props: {
 
   useEffect(() => {
     if (!props.open) return
+    setCurrentPage('main')
     refreshRecycle()
     refreshCounts()
   }, [props.open, props.currentLedgerId])
 
   useEffect(() => {
     if (props.open) {
+      setCurrentPage('main')
       setSheetMounted(true)
       setSheetDragY(0)
       setSheetDragging(false)
@@ -91,26 +82,10 @@ export function SettingsPage(props: {
     setSheetVisible(false)
     setSheetDragY(0)
     setSheetDragging(false)
+    setCurrentPage('main')
     const t = window.setTimeout(() => setSheetMounted(false), 200)
     return () => window.clearTimeout(t)
   }, [props.open, sheetMounted])
-
-  useEffect(() => {
-    if (recycleOpen) {
-      setRecycleMounted(true)
-      setRecycleDragY(0)
-      setRecycleDragging(false)
-      recycleCloseInFlightRef.current = false
-      requestAnimationFrame(() => setRecycleVisible(true))
-      return
-    }
-    if (!recycleMounted) return
-    setRecycleVisible(false)
-    setRecycleDragY(0)
-    setRecycleDragging(false)
-    const t = window.setTimeout(() => setRecycleMounted(false), 200)
-    return () => window.clearTimeout(t)
-  }, [recycleOpen, recycleMounted])
 
   const refreshInvites = async () => {
     setInviteLoading(true)
@@ -123,8 +98,11 @@ export function SettingsPage(props: {
   }
 
   useEffect(() => {
-    if (currentPage !== 'invites') return
-    refreshInvites().catch((e) => dialog.toast({ message: String(e?.message || e), kind: 'error' }))
+    if (currentPage === 'invites') {
+      refreshInvites().catch((e) => dialog.toast({ message: String(e?.message || e), kind: 'error' }))
+    } else if (currentPage === 'recycle') {
+      refreshRecycle().catch((e) => dialog.toast({ message: String(e?.message || e), kind: 'error' }))
+    }
   }, [currentPage])
 
   if (!sheetMounted) return null
@@ -147,6 +125,7 @@ export function SettingsPage(props: {
         setSheetVisible(false)
         setSheetDragY(0)
         setSheetDragging(false)
+        setCurrentPage('main')
         window.setTimeout(() => props.onClose(), 200)
       }, 70)
       return
@@ -155,28 +134,8 @@ export function SettingsPage(props: {
     setSheetVisible(false)
     setSheetDragY(0)
     setSheetDragging(false)
+    setCurrentPage('main')
     window.setTimeout(() => props.onClose(), 200)
-  }
-
-  const requestRecycleClose = (options?: { feedback?: boolean }) => {
-    if (recycleCloseInFlightRef.current) return
-    recycleCloseInFlightRef.current = true
-
-    if (options?.feedback && !recycleDragging) {
-      setRecycleDragY(18)
-      window.setTimeout(() => {
-        setRecycleVisible(false)
-        setRecycleDragY(0)
-        setRecycleDragging(false)
-        window.setTimeout(() => setRecycleOpen(false), 200)
-      }, 70)
-      return
-    }
-
-    setRecycleVisible(false)
-    setRecycleDragY(0)
-    setRecycleDragging(false)
-    window.setTimeout(() => setRecycleOpen(false), 200)
   }
 
   const fmtIso = (s: string | null) => (s ? s.replace('T', ' ').replace('Z', '') : '—')
@@ -282,28 +241,28 @@ export function SettingsPage(props: {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
             <button
               type="button"
-              onClick={() => currentPage === 'invites' ? setCurrentPage('main') : null}
+              onClick={() => currentPage !== 'main' ? setCurrentPage('main') : null}
               style={{
                 width: '44px',
                 height: '44px',
                 borderRadius: '999px',
-                border: currentPage === 'invites' ? '1px solid rgba(0,0,0,0.08)' : 'none',
-                background: currentPage === 'invites' ? '#fff' : 'transparent',
-                cursor: currentPage === 'invites' ? 'pointer' : 'default',
+                border: currentPage !== 'main' ? '1px solid rgba(0,0,0,0.08)' : 'none',
+                background: currentPage !== 'main' ? '#fff' : 'transparent',
+                cursor: currentPage !== 'main' ? 'pointer' : 'default',
                 fontSize: '20px',
                 lineHeight: 1,
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                opacity: currentPage === 'invites' ? 1 : 0,
-                pointerEvents: currentPage === 'invites' ? 'auto' : 'none',
+                opacity: currentPage !== 'main' ? 1 : 0,
+                pointerEvents: currentPage !== 'main' ? 'auto' : 'none',
               }}
               aria-label="返回"
             >
               ←
             </button>
             <div style={{ fontWeight: 900, fontSize: '16px', color: '#111' }}>
-              {currentPage === 'main' ? '设置' : '邀请码管理'}
+              {currentPage === 'main' ? '设置' : currentPage === 'invites' ? '邀请码管理' : '回收站'}
             </div>
             <button
               type="button"
@@ -462,18 +421,19 @@ export function SettingsPage(props: {
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                   <button
                     type="button"
-                    onClick={() => setRecycleOpen(true)}
+                    onClick={() => setCurrentPage('recycle')}
                     style={{
                       flex: 1,
                       minWidth: '140px',
                       padding: '10px 12px',
                       borderRadius: '12px',
-                      border: '1px solid rgba(0,0,0,0.12)',
-                      background: '#fff',
-                      cursor: 'pointer',
+                      border: '1px solid rgba(22,119,255,0.25)',
+                      background: 'rgba(22,119,255,0.08)',
+                      color: '#1677ff',
                       fontSize: '13px',
                       fontWeight: 700,
-                      color: '#111',
+                      textAlign: 'center',
+                      cursor: 'pointer',
                     }}
                   >
                     打开回收站
@@ -510,7 +470,7 @@ export function SettingsPage(props: {
                 </div>
               </section>
             </>
-          ) : (
+          ) : currentPage === 'invites' ? (
             <>
               <div style={{ marginTop: '6px', fontSize: '13px', fontWeight: 700, color: '#666', lineHeight: 1.6 }}>
                 用于新设备注册登录，默认有效期 7 天。
@@ -680,160 +640,64 @@ export function SettingsPage(props: {
                 )}
               </div>
             </>
-          )}
-        </div>
-
-        {recycleOpen && (
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(0,0,0,0.45)',
-              opacity: recycleVisible ? 1 : 0,
-              transition: 'opacity 200ms ease',
-              display: 'flex',
-              alignItems: 'flex-end',
-              justifyContent: 'center',
-              padding: '0',
-              zIndex: 1600,
-            }}
-            onClick={() => requestRecycleClose({ feedback: true })}
-          >
-            {recycleMounted && (
-              <div
-              style={{
-                width: '100%',
-                maxWidth: '720px',
-                background: '#f6f7f9',
-                borderTopLeftRadius: '18px',
-                borderTopRightRadius: '18px',
-                border: '1px solid rgba(0,0,0,0.06)',
-                padding: '12px',
-                paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
-                maxHeight: '92vh',
-                overflow: recycleDragging ? 'hidden' : 'auto',
-                boxShadow: '0 -16px 40px rgba(0,0,0,0.18)',
-                transform: `translateY(${recycleVisible ? rubberBandY(recycleDragY) : 520}px)`,
-                transition: recycleDragging ? 'none' : 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)',
-                touchAction: 'pan-y',
-                overscrollBehavior: 'contain',
-                WebkitOverflowScrolling: 'touch',
-              }}
-              onClick={(e) => e.stopPropagation()}
-              ref={recycleContainerRef}
-            >
-              <div
-                style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 10px' }}
-                onPointerDown={(e) => {
-                  if (e.button !== 0) return
-                  if ((recycleContainerRef.current?.scrollTop || 0) > 0) return
-                  recycleDragStartYRef.current = e.clientY
-                  recycleDragStartTimeRef.current = performance.now()
-                  recycleDragLastRef.current = { y: e.clientY, t: performance.now() }
-                  setRecycleDragging(true)
-                  setRecycleDragY(0)
-                  ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
-                }}
-                onPointerMove={(e) => {
-                  if (!recycleDragging) return
-                  if (recycleDragStartYRef.current === null) return
-                  const dy = Math.max(0, e.clientY - recycleDragStartYRef.current)
-                  setRecycleDragY(Math.min(dy, 720))
-                  recycleDragLastRef.current = { y: e.clientY, t: performance.now() }
-                }}
-                onPointerUp={(e) => {
-                  if (!recycleDragging) return
-                  ;(e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId)
-                  const dy = recycleDragY
-                  const startY = recycleDragStartYRef.current
-                  const startT = recycleDragStartTimeRef.current
-                  const last = recycleDragLastRef.current
-                  recycleDragStartYRef.current = null
-                  recycleDragStartTimeRef.current = null
-                  recycleDragLastRef.current = null
-                  setRecycleDragging(false)
-                  const velocity =
-                    startY !== null && startT !== null && last && last.t > startT ? Math.max(0, (last.y - startY) / (last.t - startT)) : 0
-                  if (dy >= 110 || (dy >= 60 && velocity >= 0.8)) {
-                    requestRecycleClose()
-                    return
-                  }
-                  setRecycleDragY(0)
-                }}
-                onPointerCancel={(e) => {
-                  if (!recycleDragging) return
-                  try {
-                    ;(e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId)
-                  } catch {
-                  }
-                  recycleDragStartYRef.current = null
-                  recycleDragStartTimeRef.current = null
-                  recycleDragLastRef.current = null
-                  setRecycleDragging(false)
-                  setRecycleDragY(0)
-                }}
-              >
-                <div style={{ width: '44px', height: '5px', borderRadius: '999px', background: 'rgba(0,0,0,0.18)' }} />
+          ) : (
+            <>
+              <div style={{ marginTop: '6px', fontSize: '13px', fontWeight: 700, color: '#666', lineHeight: 1.6 }}>
+                已删除的交易记录，可恢复或彻底删除。
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
-                <div style={{ fontWeight: 900, color: '#111' }}>回收站</div>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const ok = await dialog.confirm({
-                        title: '彻底删除回收站',
-                        message: '将永久删除回收站内的所有数据，删除后不可恢复。确定继续吗？',
-                        okText: '确定删除',
-                        cancelText: '取消',
-                      })
-                      if (!ok) return
-                      await storage.setPendingPurgeToken(new Date().toISOString())
-                      await storage.purgeDeletedTransactionsLocal()
-                      await refreshRecycle()
-                      await refreshCounts()
-                      await props.onDataChanged()
-                      await props.onSyncNow()
-                    }}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: '12px',
-                      border: '1px solid rgba(214,48,49,0.25)',
-                      background: 'rgba(214,48,49,0.08)',
-                      cursor: 'pointer',
-                      fontWeight: 800,
-                      color: '#d63031',
-                      fontSize: '13px',
-                    }}
-                  >
-                    彻底删除
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      requestRecycleClose()
-                    }}
-                    style={{
-                      width: '44px',
-                      height: '44px',
-                      borderRadius: '999px',
-                      border: '1px solid rgba(0,0,0,0.08)',
-                      background: '#fff',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      lineHeight: 1,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                    aria-label="关闭"
-                  >
-                    ×
-                  </button>
-                </div>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = await dialog.confirm({
+                      title: '彻底删除回收站',
+                      message: '将永久删除回收站内的所有数据，删除后不可恢复。确定继续吗？',
+                      okText: '确定删除',
+                      cancelText: '取消',
+                    })
+                    if (!ok) return
+                    await storage.setPendingPurgeToken(new Date().toISOString())
+                    await storage.purgeDeletedTransactionsLocal()
+                    await refreshRecycle()
+                    await refreshCounts()
+                    await props.onDataChanged()
+                    await props.onSyncNow()
+                  }}
+                  style={{
+                    flex: 1,
+                    minWidth: '140px',
+                    padding: '10px 12px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(214,48,49,0.25)',
+                    background: 'rgba(214,48,49,0.08)',
+                    cursor: 'pointer',
+                    fontWeight: 800,
+                    color: '#d63031',
+                    fontSize: '13px',
+                  }}
+                >
+                  彻底删除
+                </button>
+                <button
+                  type="button"
+                  onClick={() => refreshRecycle().catch((e) => dialog.toast({ message: String(e?.message || e), kind: 'error' }))}
+                  disabled={recycleLoading}
+                  style={{
+                    flex: 1,
+                    minWidth: '140px',
+                    padding: '10px 12px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(0,0,0,0.12)',
+                    background: '#fff',
+                    cursor: recycleLoading ? 'not-allowed' : 'pointer',
+                    opacity: recycleLoading ? 0.75 : 1,
+                    fontWeight: 900,
+                    fontSize: '13px',
+                    color: '#111',
+                  }}
+                >
+                  刷新
+                </button>
               </div>
 
               <div style={{ marginTop: '12px' }}>
@@ -868,10 +732,9 @@ export function SettingsPage(props: {
                   </div>
                 )}
               </div>
-              </div>
-            )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
