@@ -17,3 +17,10 @@ deploy/.env
 # OS / editors
 .DS_Store
 Thumbs.db
+
+# python cache
+__pycache__/
+*.pyc
+
+# local requirement docs (keep tracked docs unaffected)
+Requirements/*.md
