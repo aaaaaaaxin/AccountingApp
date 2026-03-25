@@ -536,7 +536,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1300;
+  z-index: 2600;
   padding: 16px;
 }
 
@@ -602,7 +602,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  z-index: 1400;
+  z-index: 2700;
   padding: 0 16px;
   pointer-events: none;
 }
