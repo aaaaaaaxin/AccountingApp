@@ -943,4 +943,19 @@ export const storage = {
   deleteTransactionRemote,
   deleteLedgerRemote,
   applyBaselinePayload,
+  clearAllData,
 };
+
+async function clearAllData() {
+  const db = await dbPromise;
+  const tx = db.transaction(['ledgers', 'categories', 'transactions', 'templates', 'tags', 'metadata'], 'readwrite');
+  await tx.objectStore('ledgers').clear();
+  await tx.objectStore('categories').clear();
+  await tx.objectStore('transactions').clear();
+  await tx.objectStore('templates').clear();
+  await tx.objectStore('tags').clear();
+  await tx.objectStore('metadata').clear();
+  await tx.done;
+  currentLedgerId = null;
+  initialized = false;
+}

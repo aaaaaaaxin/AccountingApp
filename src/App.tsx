@@ -71,6 +71,7 @@ function App() {
   const syncSchedulerRef = useRef<ReturnType<typeof createSyncScheduler> | null>(null)
   const scaleWarnLevelRef = useRef<0 | 1 | 2>(0)
   const initialSyncAutoTriggeredRef = useRef(false)
+  const lastAuthUsernameRef = useRef<string | null>(null)
   
   const PAYMENT_METHODS = [
     { id: 'cash', name: '💵 现金' },
@@ -341,8 +342,25 @@ function App() {
       syncSchedulerRef.current?.stop()
       syncSchedulerRef.current = null
       setSyncStatus({ status: 'idle' })
+      lastAuthUsernameRef.current = null
       return
     }
+    
+    if (lastAuthUsernameRef.current && lastAuthUsernameRef.current !== authUsername) {
+      (async () => {
+        await storage.clearAllData()
+        setLedgers([])
+        setCategories([])
+        setTransactions([])
+        setAccountsTransactions([])
+        setTags([])
+        setTemplates([])
+        setCurrentLedgerId(null)
+        setSelectedLedgerIds([])
+      })()
+    }
+    lastAuthUsernameRef.current = authUsername
+    
     if (!syncSchedulerRef.current) {
       syncSchedulerRef.current = createSyncScheduler({
         run: runSync,
@@ -353,7 +371,7 @@ function App() {
         maxBackoffMs: 5 * 60 * 1000,
       })
     }
-    requestSync({ force: false })
+    requestSync({ force: lastAuthUsernameRef.current !== authUsername ? true : false })
   }, [authUsername])
 
   useEffect(() => {
