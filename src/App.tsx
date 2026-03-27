@@ -342,11 +342,11 @@ function App() {
       syncSchedulerRef.current?.stop()
       syncSchedulerRef.current = null
       setSyncStatus({ status: 'idle' })
-      lastAuthUsernameRef.current = null
       return
     }
-    
-    if (lastAuthUsernameRef.current && lastAuthUsernameRef.current !== authUsername) {
+
+    const switchedUser = lastAuthUsernameRef.current !== null && lastAuthUsernameRef.current !== authUsername
+    if (switchedUser) {
       (async () => {
         await storage.clearAllData()
         setLedgers([])
@@ -371,7 +371,7 @@ function App() {
         maxBackoffMs: 5 * 60 * 1000,
       })
     }
-    requestSync({ force: lastAuthUsernameRef.current !== authUsername ? true : false })
+    requestSync({ force: switchedUser })
   }, [authUsername])
 
   useEffect(() => {
