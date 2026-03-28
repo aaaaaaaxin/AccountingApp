@@ -338,17 +338,20 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!authUsername) {
-      syncSchedulerRef.current?.stop()
-      syncSchedulerRef.current = null
-      setSyncStatus({ status: 'idle' })
-      return
-    }
+    let cancelled = false
+    ;(async () => {
+      if (!authUsername) {
+        syncSchedulerRef.current?.stop()
+        syncSchedulerRef.current = null
+        setSyncStatus({ status: 'idle' })
+        return
+      }
 
-    const switchedUser = lastAuthUsernameRef.current !== null && lastAuthUsernameRef.current !== authUsername
-    if (switchedUser) {
-      (async () => {
+      const prev = lastAuthUsernameRef.current
+      const switchedUser = prev !== null && prev !== authUsername
+      if (switchedUser) {
         await storage.clearAllData()
+        if (cancelled) return
         setLedgers([])
         setCategories([])
         setTransactions([])
@@ -357,21 +360,25 @@ function App() {
         setTemplates([])
         setCurrentLedgerId(null)
         setSelectedLedgerIds([])
-      })()
+      }
+
+      lastAuthUsernameRef.current = authUsername
+
+      if (!syncSchedulerRef.current) {
+        syncSchedulerRef.current = createSyncScheduler({
+          run: runSync,
+          onStatus: setSyncStatus,
+          onSuccess: async () => {
+            await refreshAfterSync()
+          },
+          maxBackoffMs: 5 * 60 * 1000,
+        })
+      }
+      requestSync({ force: switchedUser })
+    })()
+    return () => {
+      cancelled = true
     }
-    lastAuthUsernameRef.current = authUsername
-    
-    if (!syncSchedulerRef.current) {
-      syncSchedulerRef.current = createSyncScheduler({
-        run: runSync,
-        onStatus: setSyncStatus,
-        onSuccess: async () => {
-          await refreshAfterSync()
-        },
-        maxBackoffMs: 5 * 60 * 1000,
-      })
-    }
-    requestSync({ force: switchedUser })
   }, [authUsername])
 
   useEffect(() => {
@@ -1419,7 +1426,18 @@ function App() {
             await apiPost('/auth/logout', {})
           } catch {
           } finally {
+            await storage.clearAllData()
+            setLedgers([])
+            setCategories([])
+            setTransactions([])
+            setAccountsTransactions([])
+            setTags([])
+            setTemplates([])
+            setCurrentLedgerId(null)
+            setSelectedLedgerIds([])
+            setMonthlyStats({ income: 0, expense: 0, balance: 0 })
             setAuthUsername(null)
+            lastAuthUsernameRef.current = null
             setSettingsOpen(false)
           }
         }}
