@@ -20,6 +20,7 @@ export function SettingsPage(props: {
   const [totalCount, setTotalCount] = useState<number | null>(null)
   const [currentPage, setCurrentPage] = useState<'main' | 'invites' | 'recycle'>('main')
   const [inviteLoading, setInviteLoading] = useState(false)
+  const [exportLoading, setExportLoading] = useState(false)
   const [invites, setInvites] = useState<
     Array<{
       code: string
@@ -139,6 +140,69 @@ export function SettingsPage(props: {
   }
 
   const fmtIso = (s: string | null) => (s ? s.replace('T', ' ').replace('Z', '') : '—')
+  const downloadTextFile = (filename: string, text: string) => {
+    const blob = new Blob([text], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const exportLocalData = async () => {
+    if (exportLoading) return
+    setExportLoading(true)
+    try {
+      const ledgers = await storage.getLedgers()
+      const [syncVersion, pendingLedgerDeletes, pendingPurgeToken] = await Promise.all([
+        storage.getSyncVersion().catch(() => 0),
+        storage.getPendingLedgerDeletes().catch(() => []),
+        storage.getPendingPurgeToken().catch(() => null),
+      ])
+      const groups = await Promise.all(
+        ledgers.map(async (l) => {
+          const [categories, templates, tags, transactions] = await Promise.all([
+            storage.getCategories(l.id),
+            storage.getTemplates(l.id),
+            storage.getTagEntities(l.id),
+            storage.getAllTransactions(l.id),
+          ])
+          return { ledger: l, categories, templates, tags, transactions }
+        }),
+      )
+      const payload = {
+        schema: 'accounting-app-export',
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        account: props.authUsername,
+        sync: {
+          syncVersion,
+          pendingLedgerDeletes,
+          pendingPurgeToken,
+        },
+        data: {
+          ledgers: groups.map((g) => g.ledger),
+          categories: groups.flatMap((g) => g.categories),
+          templates: groups.flatMap((g) => g.templates),
+          tags: groups.flatMap((g) => g.tags),
+          transactions: groups.flatMap((g) => g.transactions),
+        },
+      }
+
+      const ts = new Date().toISOString().replace(/[:.]/g, '-')
+      const safeUser = (props.authUsername || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_')
+      downloadTextFile(`accounting_export_${safeUser}_${ts}.json`, JSON.stringify(payload))
+      dialog.toast({ message: '已导出数据文件', kind: 'success' })
+    } catch (e: any) {
+      dialog.toast({ message: String(e?.message || e || '导出失败'), kind: 'error' })
+    } finally {
+      setExportLoading(false)
+    }
+  }
 
   return (
     <div
@@ -464,6 +528,28 @@ export function SettingsPage(props: {
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
                   <div style={{ fontSize: '13px', color: '#2c3e50' }}>总记录数</div>
                   <div style={{ fontSize: '13px', fontWeight: 800, color: '#111' }}>{totalCount === null ? '-' : totalCount}</div>
+                </div>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={exportLocalData}
+                    disabled={exportLoading}
+                    style={{
+                      flex: 1,
+                      minWidth: '140px',
+                      padding: '10px 12px',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(0,0,0,0.12)',
+                      background: '#fff',
+                      cursor: exportLoading ? 'not-allowed' : 'pointer',
+                      opacity: exportLoading ? 0.75 : 1,
+                      fontSize: '13px',
+                      fontWeight: 900,
+                      color: '#111',
+                    }}
+                  >
+                    {exportLoading ? '导出中...' : '导出数据'}
+                  </button>
                 </div>
                 <div style={{ marginTop: '8px', fontSize: '12px', color: '#666', lineHeight: 1.6 }}>
                   删除的记录会保留在回收站中，服务端会按 30 天自动清理（并通过同步传播）。
