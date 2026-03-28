@@ -140,8 +140,8 @@ export function SettingsPage(props: {
   }
 
   const fmtIso = (s: string | null) => (s ? s.replace('T', ' ').replace('Z', '') : '—')
-  const downloadTextFile = (filename: string, text: string) => {
-    const blob = new Blob([text], { type: 'application/json;charset=utf-8' })
+  const downloadTextFile = (filename: string, text: string, mime: string) => {
+    const blob = new Blob([text], { type: mime })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -153,16 +153,18 @@ export function SettingsPage(props: {
     URL.revokeObjectURL(url)
   }
 
+  const csvCell = (value: unknown) => {
+    const s = value === null || value === undefined ? '' : String(value)
+    const escaped = s.replace(/"/g, '""')
+    if (/[",\r\n]/.test(escaped)) return `"${escaped}"`
+    return escaped
+  }
+
   const exportLocalData = async () => {
     if (exportLoading) return
     setExportLoading(true)
     try {
       const ledgers = await storage.getLedgers()
-      const [syncVersion, pendingLedgerDeletes, pendingPurgeToken] = await Promise.all([
-        storage.getSyncVersion().catch(() => 0),
-        storage.getPendingLedgerDeletes().catch(() => []),
-        storage.getPendingPurgeToken().catch(() => null),
-      ])
       const groups = await Promise.all(
         ledgers.map(async (l) => {
           const [categories, templates, tags, transactions] = await Promise.all([
@@ -174,29 +176,63 @@ export function SettingsPage(props: {
           return { ledger: l, categories, templates, tags, transactions }
         }),
       )
-      const payload = {
-        schema: 'accounting-app-export',
-        schemaVersion: 1,
-        exportedAt: new Date().toISOString(),
-        account: props.authUsername,
-        sync: {
-          syncVersion,
-          pendingLedgerDeletes,
-          pendingPurgeToken,
-        },
-        data: {
-          ledgers: groups.map((g) => g.ledger),
-          categories: groups.flatMap((g) => g.categories),
-          templates: groups.flatMap((g) => g.templates),
-          tags: groups.flatMap((g) => g.tags),
-          transactions: groups.flatMap((g) => g.transactions),
-        },
+
+      const ledgerNameById = new Map<string, string>()
+      const categoryNameById = new Map<string, string>()
+      for (const g of groups) {
+        ledgerNameById.set(g.ledger.id, g.ledger.name)
+        for (const c of g.categories) categoryNameById.set(c.id, c.name)
+      }
+
+      const rows = groups
+        .flatMap((g) => g.transactions)
+        .filter((t) => !t.deletedAt)
+        .sort((a, b) => {
+          if (a.date !== b.date) return b.date.localeCompare(a.date)
+          return b.createdAt.localeCompare(a.createdAt)
+        })
+
+      const header = [
+        'date',
+        'type',
+        'amount',
+        'ledger',
+        'category',
+        'note',
+        'paymentMethod',
+        'tags',
+        'createdAt',
+        'updatedAt',
+        'id',
+      ]
+
+      const lines: string[] = []
+      lines.push(header.map(csvCell).join(','))
+      for (const t of rows) {
+        lines.push(
+          [
+            t.date,
+            t.type,
+            t.amount,
+            ledgerNameById.get(t.ledgerId) || t.ledgerId,
+            categoryNameById.get(t.categoryId) || t.categoryId,
+            t.note || '',
+            t.paymentMethod || '',
+            (t.tags || []).join('|'),
+            t.createdAt,
+            t.updatedAt,
+            t.id,
+          ]
+            .map(csvCell)
+            .join(','),
+        )
       }
 
       const ts = new Date().toISOString().replace(/[:.]/g, '-')
       const safeUser = (props.authUsername || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_')
-      downloadTextFile(`accounting_export_${safeUser}_${ts}.json`, JSON.stringify(payload))
-      dialog.toast({ message: '已导出数据文件', kind: 'success' })
+      const csv = `\ufeff${lines.join('\r\n')}\r\n`
+      downloadTextFile(`accounting_bills_${safeUser}_${ts}.csv`, csv, 'text/csv;charset=utf-8')
+      dialog.toast({ message: '已导出CSV账单', kind: 'success' })
     } catch (e: any) {
       dialog.toast({ message: String(e?.message || e || '导出失败'), kind: 'error' })
     } finally {
@@ -548,7 +584,7 @@ export function SettingsPage(props: {
                       color: '#111',
                     }}
                   >
-                    {exportLoading ? '导出中...' : '导出数据'}
+                    {exportLoading ? '导出中...' : '导出账单（CSV）'}
                   </button>
                 </div>
                 <div style={{ marginTop: '8px', fontSize: '12px', color: '#666', lineHeight: 1.6 }}>
